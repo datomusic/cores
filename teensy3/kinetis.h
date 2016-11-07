@@ -550,6 +550,7 @@ enum IRQ_NUMBER_t {
 #define HAS_KINETIS_ADC0
 #define HAS_KINETIS_ADC1
 #define HAS_KINETIS_FLASH_FTFE
+#define HAS_KINETIS_SDHC
 
 
 #elif defined(__MK66FX1M0__)
@@ -753,6 +754,8 @@ enum IRQ_NUMBER_t {
 #define HAS_KINETIS_ADC1
 #define HAS_KINETIS_TSI_LITE
 #define HAS_KINETIS_FLASH_FTFE
+#define HAS_KINETIS_SDHC
+#define HAS_KINETIS_HSRUN
 
 
 
@@ -1228,6 +1231,9 @@ enum IRQ_NUMBER_t {
 #define SIM_CLKDIV1_OUTDIV2(n)		((uint32_t)(((n) & 0x0F) << 24)) // divide value for the peripheral clock
 #define SIM_CLKDIV1_OUTDIV3(n)		((uint32_t)(((n) & 0x0F) << 20)) // divide value for the flexbus clock
 #define SIM_CLKDIV1_OUTDIV4(n)		((uint32_t)(((n) & 0x0F) << 16)) // divide value for the flash clock
+#define SIM_CLKDIV1_OUTDIVS(n1, n2, n3, n4) \
+					(SIM_CLKDIV1_OUTDIV1(n1) | SIM_CLKDIV1_OUTDIV2(n2) | \
+					SIM_CLKDIV1_OUTDIV3(n3) | SIM_CLKDIV1_OUTDIV4(n4))
 #define SIM_CLKDIV2		(*(volatile uint32_t *)0x40048048) // System Clock Divider Register 2
 #define SIM_CLKDIV2_USBDIV(n)		((uint32_t)(((n) & 0x07) << 1))
 #define SIM_CLKDIV2_USBFRAC		((uint32_t)0x01)
@@ -1976,7 +1982,7 @@ enum IRQ_NUMBER_t {
 #define DMA_TCD_NBYTES_SMLOE		    ((uint32_t)1<<31)		    // Source Minor Loop Offset Enable
 #define DMA_TCD_NBYTES_DMLOE		    ((uint32_t)1<<30)		    // Destination Minor Loop Offset Enable
 #define DMA_TCD_NBYTES_MLOFFNO_NBYTES(n)    ((uint32_t)((n) & 0x3FFFFFFF))  // NBytes transfer count when minor loop disabled
-#define DMA_TCD_NBYTES_MLOFFYES_NBYTES(n)   ((uint32_t)((n) & 0x1F))	    // NBytes transfer count when minor loop enabled
+#define DMA_TCD_NBYTES_MLOFFYES_NBYTES(n)   ((uint32_t)((n) & 0x3FF))	    // NBytes transfer count when minor loop enabled
 #define DMA_TCD_NBYTES_MLOFFYES_MLOFF(n)    ((uint32_t)((n) & 0xFFFFF)<<10) // Minor loop offset
 
 #if DMA_NUM_CHANNELS >= 4
@@ -3876,6 +3882,17 @@ typedef struct {
 #define USB_USBTRC_SYNC_DET		((uint8_t)0x02)			//
 #define USB_USBTRC_USB_RESUME_INT	((uint8_t)0x01)			//
 #define USB0_USBFRMADJUST	(*(volatile uint8_t  *)0x40072114) // Frame Adjust Register
+#define USB0_CLK_RECOVER_CTRL	(*(volatile uint8_t  *)0x40072140) // USB Clock recovery control
+#define USB_CLK_RECOVER_CTRL_CLOCK_RECOVER_EN		((uint8_t)0x80)
+#define USB_CLK_RECOVER_CTRL_RESET_RESUME_ROUGH_EN	((uint8_t)0x40)
+#define USB_CLK_RECOVER_CTRL_RESTART_IFRTRIM_EN		((uint8_t)0x20)
+#define USB0_CLK_RECOVER_IRC_EN	(*(volatile uint8_t  *)0x40072144) // IRC48M oscillator enable 
+#define USB_CLK_RECOVER_IRC_EN_IRC_EN			((uint8_t)0x02)
+#define USB_CLK_RECOVER_IRC_EN_REG_EN			((uint8_t)0x01)
+#define USB0_CLK_RECOVER_INT_EN	(*(volatile uint8_t  *)0x40072154) // Clock recovery combined interrupt enable
+#define USB_CLK_RECOVER_INT_EN_OVF_ERROR_EN		((uint8_t)0x10)
+#define USB0_CLK_RECOVER_INT_STATUS (*(volatile uint8_t  *)0x4007215C) // Clock recovery separated interrupt status
+#define USB_CLK_RECOVER_INT_STATUS_OVF_ERROR		((uint8_t)0x10)
 
 
 // USB Device Charger Detection Module (USBDCD)
@@ -5645,6 +5662,14 @@ typedef struct __attribute__((packed)) {
 extern "C" {
 #endif
 extern int nvic_execution_priority(void);
+
+#if defined(HAS_KINETIS_HSRUN) && F_CPU > 120000000
+extern int kinetis_hsrun_disable(void);
+extern int kinetis_hsrun_enable(void);
+#else
+__attribute__((always_inline)) static inline int kinetis_hsrun_disable(void) { return 0; }
+__attribute__((always_inline)) static inline int kinetis_hsrun_enable(void)  { return 0; }
+#endif
 
 extern void nmi_isr(void);
 extern void hard_fault_isr(void);

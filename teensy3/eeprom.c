@@ -31,6 +31,9 @@
 #include "kinetis.h"
 #include <avr/eeprom.h>
 //#include "HardwareSerial.h"
+#if F_CPU > 120000000 && defined(__MK66FX1M0__)
+#include "core_pins.h"	// delayMicroseconds()
+#endif
 
 
 #if defined(__MK20DX128__) || defined(__MK20DX256__)
@@ -112,6 +115,7 @@ void eeprom_initialize(void)
 		if (stat) FTFL_FSTAT = stat;
 		// FlexRAM is configured as traditional RAM
 		// We need to reconfigure for EEPROM usage
+		kinetis_hsrun_disable();
 		FTFL_FCCOB0 = 0x80; // PGMPART = Program Partition Command
 		FTFL_FCCOB3 = 0;
 		FTFL_FCCOB4 = EEESPLIT | EEESIZE;
@@ -120,6 +124,7 @@ void eeprom_initialize(void)
 		// do_flash_cmd() must execute from RAM.  Luckily the C syntax is simple...
 		(*((void (*)(volatile uint8_t *))((uint32_t)do_flash_cmd | 1)))(&FTFL_FSTAT);
 		__enable_irq();
+		kinetis_hsrun_enable();
 		status = FTFL_FSTAT;
 		if (status & 0x70) {
 			FTFL_FSTAT = (status & 0x70);
@@ -190,10 +195,12 @@ void eeprom_write_byte(uint8_t *addr, uint8_t value)
 	if (offset >= EEPROM_SIZE) return;
 	if (!(FTFL_FCNFG & FTFL_FCNFG_EEERDY)) eeprom_initialize();
 	if (FlexRAM[offset] != value) {
+		kinetis_hsrun_disable();
 		uint8_t stat = FTFL_FSTAT & 0x70;
 		if (stat) FTFL_FSTAT = stat;
 		FlexRAM[offset] = value;
 		flexram_wait();
+		kinetis_hsrun_enable();
 	}
 }
 
@@ -207,24 +214,30 @@ void eeprom_write_word(uint16_t *addr, uint16_t value)
 	if ((offset & 1) == 0) {
 #endif
 		if (*(uint16_t *)(&FlexRAM[offset]) != value) {
+			kinetis_hsrun_disable();
 			uint8_t stat = FTFL_FSTAT & 0x70;
 			if (stat) FTFL_FSTAT = stat;
 			*(uint16_t *)(&FlexRAM[offset]) = value;
 			flexram_wait();
+			kinetis_hsrun_enable();
 		}
 #ifdef HANDLE_UNALIGNED_WRITES
 	} else {
 		if (FlexRAM[offset] != value) {
+			kinetis_hsrun_disable();
 			uint8_t stat = FTFL_FSTAT & 0x70;
 			if (stat) FTFL_FSTAT = stat;
 			FlexRAM[offset] = value;
 			flexram_wait();
+			kinetis_hsrun_enable();
 		}
 		if (FlexRAM[offset + 1] != (value >> 8)) {
+			kinetis_hsrun_disable();
 			uint8_t stat = FTFL_FSTAT & 0x70;
 			if (stat) FTFL_FSTAT = stat;
 			FlexRAM[offset + 1] = value >> 8;
 			flexram_wait();
+			kinetis_hsrun_enable();
 		}
 	}
 #endif
@@ -241,45 +254,57 @@ void eeprom_write_dword(uint32_t *addr, uint32_t value)
 	case 0:
 #endif
 		if (*(uint32_t *)(&FlexRAM[offset]) != value) {
+			kinetis_hsrun_disable();
 			uint8_t stat = FTFL_FSTAT & 0x70;
 			if (stat) FTFL_FSTAT = stat;
 			*(uint32_t *)(&FlexRAM[offset]) = value;
 			flexram_wait();
+			kinetis_hsrun_enable();
 		}
 		return;
 #ifdef HANDLE_UNALIGNED_WRITES
 	case 2:
 		if (*(uint16_t *)(&FlexRAM[offset]) != value) {
+			kinetis_hsrun_disable();
 			uint8_t stat = FTFL_FSTAT & 0x70;
 			if (stat) FTFL_FSTAT = stat;
 			*(uint16_t *)(&FlexRAM[offset]) = value;
 			flexram_wait();
+			kinetis_hsrun_enable();
 		}
 		if (*(uint16_t *)(&FlexRAM[offset + 2]) != (value >> 16)) {
+			kinetis_hsrun_disable();
 			uint8_t stat = FTFL_FSTAT & 0x70;
 			if (stat) FTFL_FSTAT = stat;
 			*(uint16_t *)(&FlexRAM[offset + 2]) = value >> 16;
 			flexram_wait();
+			kinetis_hsrun_enable();
 		}
 		return;
 	default:
 		if (FlexRAM[offset] != value) {
+			kinetis_hsrun_disable();
 			uint8_t stat = FTFL_FSTAT & 0x70;
 			if (stat) FTFL_FSTAT = stat;
 			FlexRAM[offset] = value;
 			flexram_wait();
+			kinetis_hsrun_enable();
 		}
 		if (*(uint16_t *)(&FlexRAM[offset + 1]) != (value >> 8)) {
+			kinetis_hsrun_disable();
 			uint8_t stat = FTFL_FSTAT & 0x70;
 			if (stat) FTFL_FSTAT = stat;
 			*(uint16_t *)(&FlexRAM[offset + 1]) = value >> 8;
 			flexram_wait();
+			kinetis_hsrun_enable();
 		}
 		if (FlexRAM[offset + 3] != (value >> 24)) {
+			kinetis_hsrun_disable();
 			uint8_t stat = FTFL_FSTAT & 0x70;
 			if (stat) FTFL_FSTAT = stat;
 			FlexRAM[offset + 3] = value >> 24;
 			flexram_wait();
+			kinetis_hsrun_enable();
 		}
 	}
 #endif
@@ -304,10 +329,12 @@ void eeprom_write_block(const void *buf, void *addr, uint32_t len)
 			val32 |= (*src++ << 16);
 			val32 |= (*src++ << 24);
 			if (*(uint32_t *)(&FlexRAM[offset]) != val32) {
+				kinetis_hsrun_disable();
 				uint8_t stat = FTFL_FSTAT & 0x70;
 				if (stat) FTFL_FSTAT = stat;
 				*(uint32_t *)(&FlexRAM[offset]) = val32;
 				flexram_wait();
+				kinetis_hsrun_enable();
 			}
 			offset += 4;
 			len -= 4;
@@ -317,10 +344,12 @@ void eeprom_write_block(const void *buf, void *addr, uint32_t len)
 			val16 = *src++;
 			val16 |= (*src++ << 8);
 			if (*(uint16_t *)(&FlexRAM[offset]) != val16) {
+				kinetis_hsrun_disable();
 				uint8_t stat = FTFL_FSTAT & 0x70;
 				if (stat) FTFL_FSTAT = stat;
 				*(uint16_t *)(&FlexRAM[offset]) = val16;
 				flexram_wait();
+				kinetis_hsrun_enable();
 			}
 			offset += 2;
 			len -= 2;
@@ -328,10 +357,12 @@ void eeprom_write_block(const void *buf, void *addr, uint32_t len)
 			// write 8 bits
 			uint8_t val8 = *src++;
 			if (FlexRAM[offset] != val8) {
+				kinetis_hsrun_disable();
 				uint8_t stat = FTFL_FSTAT & 0x70;
 				if (stat) FTFL_FSTAT = stat;
 				FlexRAM[offset] = val8;
 				flexram_wait();
+				kinetis_hsrun_enable();
 			}
 			offset++;
 			len--;
